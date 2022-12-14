@@ -157,7 +157,7 @@ const FAMILY_SEED = 0x21
 const NODE_PUBLIC = 0x1c
 
 // [1, 225, 75]
-const ED25519_SEED = [0x01, 0xe1, 0x4b]
+const ED25519_SEED = [0x01, 0xe1, 0x4b, FAMILY_SEED]
 
 const codecOptions = {
   sha256(bytes: Uint8Array): Buffer {
