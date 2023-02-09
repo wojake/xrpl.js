@@ -13,7 +13,7 @@ interface SubmitAndWaitBatchResult {
   // Successfully submitted transactions
   success: TxResponse[]
   // Failed submitted transactions
-  error: Error[]
+  error: Array<Error | XrplError | ValidationError>
 }
 
 async function sleep(ms: number): Promise<void> {

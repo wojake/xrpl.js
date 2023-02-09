@@ -5,6 +5,7 @@
     "test": "lerna run test --stream",
     "test:browser": "lerna run test:browser --stream",
     "test:integration": "lerna run test:integration --stream",
+    "test:integration:submitandwaitbatch": "lerna run test:integration:submitandwaitbatch --stream",
     "lint": "lerna run lint --stream",
     "clean": "lerna run clean --stream",
     "build": "lerna run build --stream",

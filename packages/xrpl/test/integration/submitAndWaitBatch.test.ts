@@ -1,41 +1,67 @@
 /* eslint-disable @typescript-eslint/no-misused-promises -- supposed to return a promise here */
 /* eslint-disable no-restricted-syntax -- not sure why this rule is here, definitely not needed here */
 import { assert } from 'chai'
-import _ from 'lodash'
-import { Payment } from 'xrpl-local'
+
+import { AccountDelete, Payment, XrplError, type Client } from '../../src'
 
 import serverUrl from './serverUrl'
-import { setupClient, teardownClient } from './setup'
+import {
+  setupClient,
+  teardownClient,
+  type XrplIntegrationTestContext,
+} from './setup'
 import { generateFundedWallet, ledgerAccept } from './utils'
 
 // how long before each test case times out
 const TIMEOUT = 60000
 
-describe('client.submitAndWaitBatch', function () {
-  this.timeout(TIMEOUT)
+function assertErrorAndStatus(
+  error: Awaited<ReturnType<Client['submitAndWaitBatch']>>['error'][0],
+  errorMessage: string,
+  errorStatus: string,
+): void {
+  assert.equal(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- casting to any to access error field
+    ((error as XrplError).data as any)?.error as string,
+    errorMessage,
+  )
 
-  beforeEach(_.partial(setupClient, serverUrl))
-  afterEach(teardownClient)
+  assert.equal(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- casting to any to access status field
+    ((error as XrplError).data as any)?.status as string,
+    errorStatus,
+  )
+}
+
+describe('client.submitAndWaitBatch', function () {
+  let testContext: XrplIntegrationTestContext
+
+  beforeAll(() => jest.setTimeout(TIMEOUT))
+
+  beforeEach(async () => {
+    testContext = await setupClient(serverUrl)
+  })
+  afterEach(async () => teardownClient(testContext))
 
   it('submitAndWaitBatch a single account submits one payment transaction', async function () {
-    const receiverWallet = await generateFundedWallet(this.client)
+    const receiverWallet = await generateFundedWallet(testContext.client)
 
     const paymentTx: Payment = {
       TransactionType: 'Payment',
-      Account: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
       Destination: receiverWallet.classicAddress,
       Amount: '1000',
     }
     const txList = [
       {
         transaction: paymentTx,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
     ]
 
-    const responsePromise = this.client.submitAndWaitBatch(txList)
+    const responsePromise = testContext.client.submitAndWaitBatch(txList)
 
-    const ledgerPromise = setTimeout(ledgerAccept, 1000, this.client)
+    const ledgerPromise = setTimeout(ledgerAccept, 1000, testContext.client)
     return Promise.all([responsePromise, ledgerPromise]).then(
       ([result, _ledger]) => {
         assert.equal(result.success.length, 1)
@@ -47,63 +73,63 @@ describe('client.submitAndWaitBatch', function () {
   })
 
   it('submitAndWaitBatch a single account submits one failed transaction', async function () {
-    const invalidAccountDeleteTx = {
+    const invalidAccountDeleteTx: AccountDelete = {
       TransactionType: 'AccountDelete',
-      Account: this.wallet.classicAddress,
-      Destination: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
+      Destination: testContext.wallet.classicAddress,
+      // @ts-expect-error - Intentional invalid amount
       Amount: '1000',
     }
     const txList = [
       {
         transaction: invalidAccountDeleteTx,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
     ]
 
-    const responsePromise = this.client.submitAndWaitBatch(txList)
+    const responsePromise = testContext.client.submitAndWaitBatch(txList)
 
-    const ledgerPromise = setTimeout(ledgerAccept, 1000, this.client)
+    const ledgerPromise = setTimeout(ledgerAccept, 1000, testContext.client)
     return Promise.all([responsePromise, ledgerPromise]).then(
       ([result, _ledger]) => {
         assert.equal(result.success.length, 0)
         assert.equal(result.error.length, 1)
-        assert.equal(result.error[0].data.error, 'invalidTransaction')
-        assert.equal(result.error[0].data.status, 'error')
+        assertErrorAndStatus(result.error[0], 'invalidTransaction', 'error')
       },
     )
   })
 
   it('submitAndWaitBatch a single account submits multiple payment transactions', async function () {
-    const receiverWallet = await generateFundedWallet(this.client)
-    const receiverWallet2 = await generateFundedWallet(this.client)
+    const receiverWallet = await generateFundedWallet(testContext.client)
+    const receiverWallet2 = await generateFundedWallet(testContext.client)
 
     const paymentTx: Payment = {
       TransactionType: 'Payment',
-      Account: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
       Destination: receiverWallet.classicAddress,
       Amount: '1000',
     }
     const paymentTx2: Payment = {
       TransactionType: 'Payment',
-      Account: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
       Destination: receiverWallet2.classicAddress,
       Amount: '1000',
     }
     const txList = [
       {
         transaction: paymentTx,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
       {
         transaction: paymentTx2,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
     ]
 
-    const responsePromise = this.client.submitAndWaitBatch(txList)
+    const responsePromise = testContext.client.submitAndWaitBatch(txList)
 
-    const ledgerPromise = setTimeout(ledgerAccept, 1000, this.client)
-    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, this.client)
+    const ledgerPromise = setTimeout(ledgerAccept, 1000, testContext.client)
+    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, testContext.client)
     return Promise.all([responsePromise, ledgerPromise, ledgerPromise2]).then(
       ([result, _ledger, _ledger2]) => {
         assert.equal(result.success.length, 2)
@@ -117,55 +143,55 @@ describe('client.submitAndWaitBatch', function () {
   })
 
   it('submitAndWaitBatch a single account submits multiple payment transactions with one failed transaction', async function () {
-    const receiverWallet = await generateFundedWallet(this.client)
+    const receiverWallet = await generateFundedWallet(testContext.client)
 
     const paymentTx: Payment = {
       TransactionType: 'Payment',
-      Account: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
       Destination: receiverWallet.classicAddress,
       Amount: '1000',
     }
-    const invalidAccountDeleteTx = {
+    const invalidAccountDeleteTx: AccountDelete = {
       TransactionType: 'AccountDelete',
-      Account: this.wallet.classicAddress,
-      Destination: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
+      Destination: testContext.wallet.classicAddress,
+      // @ts-expect-error - intentional invalid field for testing
       Amount: '1000',
     }
     const txList = [
       {
         transaction: paymentTx,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
       {
         transaction: invalidAccountDeleteTx,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
     ]
 
-    const responsePromise = this.client.submitAndWaitBatch(txList)
+    const responsePromise = testContext.client.submitAndWaitBatch(txList)
 
-    const ledgerPromise = setTimeout(ledgerAccept, 1000, this.client)
-    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, this.client)
+    const ledgerPromise = setTimeout(ledgerAccept, 1000, testContext.client)
+    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, testContext.client)
     return Promise.all([responsePromise, ledgerPromise, ledgerPromise2]).then(
       ([result, _ledger, _ledger2]) => {
         assert.equal(result.success.length, 1)
         assert.equal(result.error.length, 1)
         assert.equal(result.success[0].type, 'response')
         assert.equal(result.success[0].result.validated, true)
-        assert.equal(result.error[0].data.error, 'invalidTransaction')
-        assert.equal(result.error[0].data.status, 'error')
+        assertErrorAndStatus(result.error[0], 'invalidTransaction', 'error')
       },
     )
   })
 
   it('submitAndWaitBatch multiple accounts submit one payment transaction', async function () {
-    const receiverWallet = await generateFundedWallet(this.client)
-    const senderWallet2 = await generateFundedWallet(this.client)
-    const receiverWallet2 = await generateFundedWallet(this.client)
+    const receiverWallet = await generateFundedWallet(testContext.client)
+    const senderWallet2 = await generateFundedWallet(testContext.client)
+    const receiverWallet2 = await generateFundedWallet(testContext.client)
 
     const paymentTx: Payment = {
       TransactionType: 'Payment',
-      Account: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
       Destination: receiverWallet.classicAddress,
       Amount: '1000',
     }
@@ -178,7 +204,7 @@ describe('client.submitAndWaitBatch', function () {
     const txList = [
       {
         transaction: paymentTx,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
       {
         transaction: paymentTx2,
@@ -186,10 +212,10 @@ describe('client.submitAndWaitBatch', function () {
       },
     ]
 
-    const responsePromise = this.client.submitAndWaitBatch(txList)
+    const responsePromise = testContext.client.submitAndWaitBatch(txList)
 
-    const ledgerPromise = setTimeout(ledgerAccept, 1000, this.client)
-    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, this.client)
+    const ledgerPromise = setTimeout(ledgerAccept, 1000, testContext.client)
+    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, testContext.client)
     return Promise.all([responsePromise, ledgerPromise, ledgerPromise2]).then(
       ([result, _ledger, _ledger2]) => {
         assert.equal(result.success.length, 2)
@@ -203,24 +229,26 @@ describe('client.submitAndWaitBatch', function () {
   })
 
   it('submitAndWaitBatch multiple accounts submit one failed transaction', async function () {
-    const senderWallet2 = await generateFundedWallet(this.client)
+    const senderWallet2 = await generateFundedWallet(testContext.client)
 
-    const invalidAccountDeleteTx = {
+    const invalidAccountDeleteTx: AccountDelete = {
       TransactionType: 'AccountDelete',
-      Account: this.wallet.classicAddress,
-      Destination: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
+      Destination: testContext.wallet.classicAddress,
+      // @ts-expect-error - intentional invalid field for testing
       Amount: '1000',
     }
-    const invalidAccountDeleteTx2 = {
+    const invalidAccountDeleteTx2: AccountDelete = {
       TransactionType: 'AccountDelete',
       Account: senderWallet2.classicAddress,
       Destination: senderWallet2.classicAddress,
+      // @ts-expect-error - intentional invalid field for testing
       Amount: '1000',
     }
     const txList = [
       {
         transaction: invalidAccountDeleteTx,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
       {
         transaction: invalidAccountDeleteTx2,
@@ -228,38 +256,37 @@ describe('client.submitAndWaitBatch', function () {
       },
     ]
 
-    const responsePromise = this.client.submitAndWaitBatch(txList)
+    const responsePromise = testContext.client.submitAndWaitBatch(txList)
 
-    const ledgerPromise = setTimeout(ledgerAccept, 1000, this.client)
-    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, this.client)
+    const ledgerPromise = setTimeout(ledgerAccept, 1000, testContext.client)
+    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, testContext.client)
     return Promise.all([responsePromise, ledgerPromise, ledgerPromise2]).then(
       ([result, _ledger, _ledger2]) => {
         assert.equal(result.success.length, 0)
         assert.equal(result.error.length, 2)
         for (const response of result.error) {
-          assert.equal(response.data.error, 'invalidTransaction')
-          assert.equal(response.data.status, 'error')
+          assertErrorAndStatus(response, 'invalidTransaction', 'error')
         }
       },
     )
   })
 
   it('submitAndWaitBatch multiple accounts submit multiple payment transactions', async function () {
-    const receiverWallet = await generateFundedWallet(this.client)
-    const receiverWallet2 = await generateFundedWallet(this.client)
-    const senderWallet2 = await generateFundedWallet(this.client)
-    const receiverWallet3 = await generateFundedWallet(this.client)
-    const receiverWallet4 = await generateFundedWallet(this.client)
+    const receiverWallet = await generateFundedWallet(testContext.client)
+    const receiverWallet2 = await generateFundedWallet(testContext.client)
+    const senderWallet2 = await generateFundedWallet(testContext.client)
+    const receiverWallet3 = await generateFundedWallet(testContext.client)
+    const receiverWallet4 = await generateFundedWallet(testContext.client)
 
     const paymentTx: Payment = {
       TransactionType: 'Payment',
-      Account: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
       Destination: receiverWallet.classicAddress,
       Amount: '1000',
     }
     const paymentTx2: Payment = {
       TransactionType: 'Payment',
-      Account: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
       Destination: receiverWallet2.classicAddress,
       Amount: '1000',
     }
@@ -278,11 +305,11 @@ describe('client.submitAndWaitBatch', function () {
     const txList = [
       {
         transaction: paymentTx,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
       {
         transaction: paymentTx2,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
       {
         transaction: paymentTx3,
@@ -294,10 +321,10 @@ describe('client.submitAndWaitBatch', function () {
       },
     ]
 
-    const responsePromise = this.client.submitAndWaitBatch(txList)
+    const responsePromise = testContext.client.submitAndWaitBatch(txList)
 
-    const ledgerPromise = setTimeout(ledgerAccept, 1000, this.client)
-    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, this.client)
+    const ledgerPromise = setTimeout(ledgerAccept, 1000, testContext.client)
+    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, testContext.client)
     return Promise.all([responsePromise, ledgerPromise, ledgerPromise2]).then(
       ([result, _ledger, _ledger2]) => {
         assert.equal(result.success.length, 4)
@@ -311,20 +338,21 @@ describe('client.submitAndWaitBatch', function () {
   })
 
   it('submitAndWaitBatch multiple accounts submit multiple payment transactions with one failed transaction', async function () {
-    const receiverWallet = await generateFundedWallet(this.client)
-    const senderWallet2 = await generateFundedWallet(this.client)
-    const receiverWallet2 = await generateFundedWallet(this.client)
+    const receiverWallet = await generateFundedWallet(testContext.client)
+    const senderWallet2 = await generateFundedWallet(testContext.client)
+    const receiverWallet2 = await generateFundedWallet(testContext.client)
 
     const paymentTx: Payment = {
       TransactionType: 'Payment',
-      Account: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
       Destination: receiverWallet.classicAddress,
       Amount: '1000',
     }
-    const invalidAccountDeleteTx = {
+    const invalidAccountDeleteTx: AccountDelete = {
       TransactionType: 'AccountDelete',
-      Account: this.wallet.classicAddress,
-      Destination: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
+      Destination: testContext.wallet.classicAddress,
+      // @ts-expect-error - intentional invalid field for testing
       Amount: '1000',
     }
     const paymentTx2: Payment = {
@@ -333,20 +361,21 @@ describe('client.submitAndWaitBatch', function () {
       Destination: receiverWallet2.classicAddress,
       Amount: '1000',
     }
-    const invalidAccountDeleteTx2 = {
+    const invalidAccountDeleteTx2: AccountDelete = {
       TransactionType: 'AccountDelete',
       Account: senderWallet2.classicAddress,
       Destination: senderWallet2.classicAddress,
+      // @ts-expect-error - intentional invalid field for testing
       Amount: '1000',
     }
     const txList = [
       {
         transaction: paymentTx,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
       {
         transaction: invalidAccountDeleteTx,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
       {
         transaction: paymentTx2,
@@ -358,10 +387,10 @@ describe('client.submitAndWaitBatch', function () {
       },
     ]
 
-    const responsePromise = this.client.submitAndWaitBatch(txList)
+    const responsePromise = testContext.client.submitAndWaitBatch(txList)
 
-    const ledgerPromise = setTimeout(ledgerAccept, 1000, this.client)
-    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, this.client)
+    const ledgerPromise = setTimeout(ledgerAccept, 1000, testContext.client)
+    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, testContext.client)
     return Promise.all([responsePromise, ledgerPromise, ledgerPromise2]).then(
       ([result, _ledger, _ledger2]) => {
         assert.equal(result.success.length, 2)
@@ -371,8 +400,7 @@ describe('client.submitAndWaitBatch', function () {
           assert.equal(response.result.validated, true)
         }
         for (const response of result.error) {
-          assert.equal(response.data.error, 'invalidTransaction')
-          assert.equal(response.data.status, 'error')
+          assertErrorAndStatus(response, 'invalidTransaction', 'error')
         }
       },
     )
@@ -392,27 +420,28 @@ describe('client.submitAndWaitBatch', function () {
    */
 
   it('submitAndWaitBatch multiple accounts submit multiple payment transactions with one failed transaction that causes subsequent transactions to fail too', async function () {
-    const receiverWallet = await generateFundedWallet(this.client)
-    const receiverWallet2 = await generateFundedWallet(this.client)
-    const senderWallet2 = await generateFundedWallet(this.client)
-    const receiverWallet3 = await generateFundedWallet(this.client)
-    const receiverWallet4 = await generateFundedWallet(this.client)
+    const receiverWallet = await generateFundedWallet(testContext.client)
+    const receiverWallet2 = await generateFundedWallet(testContext.client)
+    const senderWallet2 = await generateFundedWallet(testContext.client)
+    const receiverWallet3 = await generateFundedWallet(testContext.client)
+    const receiverWallet4 = await generateFundedWallet(testContext.client)
 
     const paymentTx: Payment = {
       TransactionType: 'Payment',
-      Account: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
       Destination: receiverWallet.classicAddress,
       Amount: '1000',
     }
-    const invalidAccountDeleteTx = {
+    const invalidAccountDeleteTx: AccountDelete = {
       TransactionType: 'AccountDelete',
-      Account: this.wallet.classicAddress,
-      Destination: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
+      Destination: testContext.wallet.classicAddress,
+      // @ts-expect-error - intentional invalid field for testing
       Amount: '1000',
     }
     const paymentTx2: Payment = {
       TransactionType: 'Payment',
-      Account: this.wallet.classicAddress,
+      Account: testContext.wallet.classicAddress,
       Destination: receiverWallet2.classicAddress,
       Amount: '1000',
     }
@@ -422,10 +451,11 @@ describe('client.submitAndWaitBatch', function () {
       Destination: receiverWallet3.classicAddress,
       Amount: '1000',
     }
-    const invalidAccountDeleteTx2 = {
+    const invalidAccountDeleteTx2: AccountDelete = {
       TransactionType: 'AccountDelete',
       Account: senderWallet2.classicAddress,
       Destination: senderWallet2.classicAddress,
+      // @ts-expect-error - intentional invalid field for testing
       Amount: '1000',
     }
     const paymentTx4: Payment = {
@@ -437,15 +467,15 @@ describe('client.submitAndWaitBatch', function () {
     const txList = [
       {
         transaction: paymentTx,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
       {
         transaction: invalidAccountDeleteTx,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
       {
         transaction: paymentTx2,
-        opts: { wallet: this.wallet },
+        opts: { wallet: testContext.wallet },
       },
       {
         transaction: paymentTx3,
@@ -461,10 +491,10 @@ describe('client.submitAndWaitBatch', function () {
       },
     ]
 
-    const responsePromise = this.client.submitAndWaitBatch(txList)
+    const responsePromise = testContext.client.submitAndWaitBatch(txList)
 
-    const ledgerPromise = setTimeout(ledgerAccept, 1000, this.client)
-    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, this.client)
+    const ledgerPromise = setTimeout(ledgerAccept, 1000, testContext.client)
+    const ledgerPromise2 = setTimeout(ledgerAccept, 3000, testContext.client)
     return Promise.all([responsePromise, ledgerPromise, ledgerPromise2]).then(
       ([result, _ledger, _ledger2]) => {
         assert.equal(result.success.length, 2)
@@ -473,14 +503,10 @@ describe('client.submitAndWaitBatch', function () {
           assert.equal(response.type, 'response')
           assert.equal(response.result.validated, true)
         }
-        assert.equal(result.error[0].data.error, 'invalidTransaction')
-        assert.equal(result.error[0].data.status, 'error')
-        assert.equal(result.error[1].data.error, 'terPRE_SEQ')
-        assert.equal(result.error[1].data.status, 'error')
-        assert.equal(result.error[2].data.error, 'invalidTransaction')
-        assert.equal(result.error[2].data.status, 'error')
-        assert.equal(result.error[3].data.error, 'terPRE_SEQ')
-        assert.equal(result.error[3].data.status, 'error')
+        assertErrorAndStatus(result.error[0], 'invalidTransaction', 'error')
+        assertErrorAndStatus(result.error[1], 'terPRE_SEQ', 'error')
+        assertErrorAndStatus(result.error[2], 'invalidTransaction', 'error')
+        assertErrorAndStatus(result.error[3], 'terPRE_SEQ', 'error')
       },
     )
   })
