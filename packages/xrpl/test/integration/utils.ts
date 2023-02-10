@@ -62,9 +62,7 @@ export async function ledgerAccept(
       .then(resolve)
       .catch((error) => {
         if (retries === undefined) {
-          setTimeout(() => {
-            resolve(ledgerAccept(client, 10))
-          }, 1000)
+          reject(error)
         } else if (retries > 0) {
           setTimeout(() => {
             resolve(ledgerAccept(client, retries - 1))
