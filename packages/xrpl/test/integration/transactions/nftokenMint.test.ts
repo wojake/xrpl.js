@@ -2,12 +2,8 @@ import { assert } from 'chai'
 import _ from 'lodash'
 import { TxRequest } from 'xrpl'
 
-import {
-  convertStringToHex,
-  ensureDecodedMeta,
-  getNFTokenID,
-  NFTokenMint,
-} from '../../../src'
+import { convertStringToHex, getNFTokenID, NFTokenMint } from '../../../src'
+import _ensureDecodedMeta from '../../../src/utils/getNFTokenID'
 import { hashSignedTx } from '../../../src/utils/hashes'
 import serverUrl from '../serverUrl'
 import {
@@ -52,7 +48,7 @@ describe('NFTokenMint', function () {
       const txResponse = await testContext.client.request(txRequest)
 
       assert.equal(
-        ensureDecodedMeta(txResponse.result.meta)?.TransactionResult,
+        _ensureDecodedMeta(txResponse.result.meta)?.TransactionResult,
         'tesSUCCESS',
       )
 
