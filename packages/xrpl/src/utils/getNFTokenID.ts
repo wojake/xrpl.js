@@ -22,7 +22,7 @@ interface NFToken {
  * @param meta - the metadata from a `tx` method call. Can be in json format or binary format.
  * @returns the metadata in a deserialized format.
  */
-function _ensureDecodedMeta(
+function ensureDecodedMeta(
   meta: TransactionMetadata | string | undefined,
 ): TransactionMetadata | undefined {
   if (typeof meta === 'string') {
@@ -42,7 +42,7 @@ function _ensureDecodedMeta(
 export default function getNFTokenID(
   meta: TransactionMetadata | string | undefined,
 ): string | undefined {
-  const decodedMeta = _ensureDecodedMeta(meta)
+  const decodedMeta = ensureDecodedMeta(meta)
 
   if (decodedMeta?.AffectedNodes === undefined) {
     throw new TypeError(`Unable to parse the parameter given to getNFTokenID.
