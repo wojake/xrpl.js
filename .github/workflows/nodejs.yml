@@ -105,11 +105,7 @@ jobs:
 
       - name: Run docker in background
         run: |
-          docker run -d --rm --name rippled-service -p 6006:6006 -v "${{ github.workspace }}/ci-config/":"/config/" --health-cmd="wget localhost:6006 || exit 1" --health-interval=5s --health-retries=10 --health-timeout=2s -e "ENV_ARGS=-a --start" -e GITHUB_ACTIONS=true -e CI=true xrpllabsofficial/xrpld:latest
-
-      - name: See what ports are in use
-        run: |
-          netstat -ano -p tcp
+          docker run --detach --rm --name rippled-service -p 6006:6006 --volume "${{ github.workspace }}/.ci-config/":"/config/" --health-cmd="wget localhost:6006 || exit 1" --health-interval=5s --health-retries=10 --health-timeout=2s --env "ENV_ARGS=-a --start" --env GITHUB_ACTIONS=true --env CI=true xrpllabsofficial/xrpld:latest
 
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v3
@@ -141,11 +137,12 @@ jobs:
 
       - run: npm run build
 
-      # Docker stop must be in same step as integration test so it doesn't get skipped if tests fail.
-      - name: Run integration test & stop docker once completed
-        run: |
-          npm run test:integration
-          docker stop rippled-service
+      - name: Run integration test
+        run: npm run test:integration
+
+      - name: Stop docker container
+        if: always()
+        run: docker stop rippled-service
 
   browser:
     runs-on: ubuntu-latest
@@ -156,10 +153,16 @@ jobs:
         node-version: [14.x] # This just needs to be compatible w/ puppeteer
 
     steps:
+      - uses: actions/checkout@v3
 
-     - name: Run docker in background
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Run docker in background
         run: |
-          docker run -d --rm --name rippled-service -p 6006:6006 -v "${{ github.workspace }}/ci-config/":"/config/" --health-cmd="wget localhost:6006 || exit 1" --health-interval=5s --health-retries=10 --health-timeout=2s -e "ENV_ARGS=-a --start" -e GITHUB_ACTIONS=true -e CI=true xrpllabsofficial/xrpld:latest
+          docker run --detach --rm --name rippled-service -p 6006:6006 --volume "${{ github.workspace }}/.ci-config/":"/config/" --health-cmd="wget localhost:6006 || exit 1" --health-interval=5s --health-retries=10 --health-timeout=2s --env "ENV_ARGS=-a --start" --env GITHUB_ACTIONS=true --env CI=true xrpllabsofficial/xrpld:latest
 
       - name: Setup npm version 7
         run: |
@@ -186,8 +189,9 @@ jobs:
 
       - run: npm run build
 
-      # Docker stop must be in same step as integration test so it doesn't get skipped if tests fail.
-      - name: Run browser test & stop docker once completed
-        run: |
-          npm run test:browser
-          docker stop rippled-service
+      - name: Run integration test
+        run: npm run test:browser
+
+      - name: Stop docker container
+        if: always()
+        run: docker stop rippled-service
