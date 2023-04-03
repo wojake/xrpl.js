@@ -64,7 +64,7 @@ From the top-level xrpl.js folder (one level above `packages`), run the followin
 ```bash
 npm install
 # sets up the rippled standalone Docker container - you can skip this step if you already have it set up
-docker run -p 6006:6006 -it -v $PWD/ci-config:/config/ xrpllabsofficial/xrpld:latest -a --start
+docker run -p 6006:6006 -it -v $PWD/.ci-config:/config/ xrpllabsofficial/xrpld:latest -a --start
 npm run build
 npm run test:integration
 ```
@@ -89,7 +89,7 @@ This should be run from the `xrpl.js` top level folder (one above the `packages`
 ```bash
 npm run build
 # sets up the rippled standalone Docker container - you can skip this step if you already have it set up
-docker run -p 6006:6006 -it -v $PWD/ci-config:/config/ xrpllabsofficial/xrpld:latest -a --start
+docker run -p 6006:6006 -it -v $PWD/.ci-config:/config/ xrpllabsofficial/xrpld:latest -a --start
 npm run test:browser
 ```
 
@@ -214,7 +214,7 @@ npm uninstall abbrev -w xrpl
 1. Actually publish the packages with one of the following:
 
    - Stable release: Run `npx lerna publish from-package --yes`
-   - Beta release: Run `npx lerna publish from-package --dist-tag beta --yes`  
+   - Beta release: Run `npx lerna publish from-package --dist-tag beta --yes`
      Notice this allows developers to install the package with `npm add xrpl@beta`
 
 1. If requested, enter your [npmjs.com](https://npmjs.com) OTP (one-time password) to complete publication.
