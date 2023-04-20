@@ -57,6 +57,14 @@ describe('Wallet', function () {
       assert.isTrue(wallet.classicAddress.startsWith(classicAddressPrefix))
     })
 
+    it('generates a new wallet using invalid/unknown algorithm', function () {
+      const algorithm = "test"
+
+      assert.throws(() => {
+        const wallet = Wallet.generate(algorithm)
+      }, /Invalid cryptographic signing algorithm/)
+    })
+    
     it('generates a new wallet using algorithm ecdsa-secp256k1', function () {
       const algorithm = ECDSA.secp256k1
       const wallet = Wallet.generate(algorithm)
